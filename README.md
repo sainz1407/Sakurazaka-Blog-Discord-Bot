@@ -9,7 +9,7 @@ Automatically monitors Sakurazaka46 official blog and posts newly published imag
 
 ```bash
 git clone https://github.com/yourusername/sakurazaka-discord-bot.git
-cd sakurazaka-discord-bot
+cd sakurazaka-blog-discord-bot
 ```
 
 ### 2. Install Dependencies
