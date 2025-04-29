@@ -8,7 +8,7 @@ Automatically monitors Sakurazaka46 official blog and posts newly published imag
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/sakurazaka-discord-bot.git
+git clone https://github.com/sainz1407/sakurazaka-discord-bot.git
 cd sakurazaka-blog-discord-bot
 ```
 
