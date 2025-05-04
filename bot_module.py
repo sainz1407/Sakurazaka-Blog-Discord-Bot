@@ -6,7 +6,7 @@ import requests
 import time
 from discord.ext import tasks
 from dotenv import load_dotenv
-from scrape_module import scrape_images, get_blog_posts, scrape_post_info
+from scrape_module import scrape_images, get_blog_posts
 
 load_dotenv()
 
@@ -89,28 +89,31 @@ class AutoImageBot(discord.Client):
 
     @tasks.loop(seconds=CHECK_INTERVAL)
     async def check_new_posts(self):
-        posts = get_blog_posts("https://sakurazaka46.com/s/s46/diary/blog/list?ima=0000")
+        posts = get_blog_posts()
         if not posts:
             print("⚠️ No posts found!")
             return
 
+        latest_id = max(p['post_id'] for p in posts)
+        
         if self.first_run:
-            new_posts = [max(posts, key=lambda x: x['post_id'])]
+            new_posts = [p for p in posts if p['post_id'] == latest_id]
             print(f"🚀 Uploading latest post {new_posts[0]['post_id']}")
         else:
             new_posts = [p for p in posts if p['post_id'] > self.last_id]
             if new_posts:
-                print(f"🆕 Found {len(new_posts)} new posts")
+                print(f"🆕 Found {len(new_posts)} new posts (IDs: {[p['post_id'] for p in new_posts]})")
             else:
                 print("ℹ️ No new posts")
-        if not new_posts:
-            return
-
-        for post in new_posts:
+        
+        for post in sorted(new_posts, key=lambda x: x['post_id']):
             print(f"⬇️ Processing post {post['post_id']} - {post['url']}")
             images = scrape_images(post['url'])
-            member, title, date = scrape_post_info(post['url'])
-
+            
+            member = post['member']
+            title = post['title']
+            date = post['date']
+            
             target_channel_id = MEMBER_CHANNELS.get(member, DEFAULT_CHANNEL_ID)
             channel = self.get_channel(target_channel_id)
 
@@ -150,7 +153,6 @@ class AutoImageBot(discord.Client):
             save_last_id(self.last_id)
 
         self.first_run = False
-
     async def send_batch(self, channel, post, member, title, date, batch, first_batch):
         clean_url = post['url'].split('?')[0]
         if first_batch:
