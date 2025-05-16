@@ -3,11 +3,20 @@ import os
 import tempfile
 import requests
 import time
+import logging
 from datetime import datetime
 from discord.ext import tasks
 from dotenv import load_dotenv
-from scrape_module import scrape_images, get_blog_posts
+from scrape_module import get_blog_posts
 from utils import load_last_date, save_last_date, get_member_channels
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('bot')
 
 load_dotenv()
 
@@ -24,10 +33,10 @@ class AutoImageBot(discord.Client):
         self.first_run = True
 
     async def on_ready(self):
-        print(f"✅ Logged in as {self.user}")
+        logger.info(f"✅ Logged in as {self.user}")
         if not self.check_new_posts.is_running():
             self.check_new_posts.start()
-        print("🔄 check_new_posts task started!")
+        logger.info("🔄 check_new_posts task started!")
 
     async def on_message(self, message):
         if message.author.id == self.user.id:
@@ -57,30 +66,30 @@ class AutoImageBot(discord.Client):
     async def check_new_posts(self):
         posts = get_blog_posts()
         if not posts:
-            print("⚠️ No posts found!")
+            logger.warning("⚠️ No posts found!")
             return
         def parse_date(p):
             return datetime.strptime(p['date'], "%Y/%m/%d %H:%M:%S")
         if self.first_run:
             latest_post = posts[0]
             new_posts = [latest_post]
-            print(f"🚀 Uploading latest post {latest_post['post_id']}")
+            logger.info(f"🚀 Uploading latest post {latest_post['post_id']}")
         else:
             new_posts = [p for p in posts if parse_date(p) > self.last_date]
             if new_posts:
-                print(f"🆕 Found {len(new_posts)} new posts (IDs: {[p['post_id'] for p in new_posts]})")
+                logger.info(f"🆕 Found {len(new_posts)} new posts (IDs: {[p['post_id'] for p in new_posts]})")
             else:
-                print("ℹ️ No new posts")
+                logger.info("ℹ️ No new posts")
         for post in sorted(new_posts, key=parse_date):
-            print(f"⬇️ Processing post {post['post_id']} - {post['url']}")
-            images = scrape_images(post['url'])
+            logger.info(f"⬇️ Processing post {post['post_id']} - {post['url']}")
+            images = post['images']
             member = post['member']
             title = post['title']
             date = post['date']
             target_channel_id = MEMBER_CHANNELS.get(member, DEFAULT_CHANNEL_ID)
             channel = self.get_channel(target_channel_id)
             if not channel:
-                print(f"⚠️ Channel not found for member {member}, fallback to default")
+                logger.warning(f"⚠️ Channel not found for member {member}, fallback to default")
                 channel = self.get_channel(DEFAULT_CHANNEL_ID)
             if images:
                 with tempfile.TemporaryDirectory() as tmp:
@@ -99,12 +108,12 @@ class AutoImageBot(discord.Client):
                                 first_batch = False
                                 batch = []
                         except Exception as e:
-                            print(f"❌ Failed to download image {url}: {e}")
+                            logger.error(f"❌ Failed to download image {url}: {e}")
                     if batch:
                         await self.send_batch(channel, post, member, title, date, batch, first_batch)
-                print(f"✅ Uploaded {len(images)} images from post {post['post_id']}")
+                logger.info(f"✅ Uploaded {len(images)} images from post {post['post_id']}")
             else:
-                print(f"ℹ️ No images found in post {post['post_id']}")
+                logger.info(f"ℹ️ No images found in post {post['post_id']}")
             self.last_date = parse_date(post)
             save_last_date(post['date'])
         self.first_run = False
@@ -124,4 +133,7 @@ if __name__ == "__main__":
     intents = discord.Intents.default()
     intents.message_content = True
     bot = AutoImageBot(intents=intents)
-    bot.run(BOT_TOKEN)
+    try:
+        bot.run(BOT_TOKEN)
+    except Exception as e:
+        logger.critical(f"❌ Failed to start bot: {e}")
